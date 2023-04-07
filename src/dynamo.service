@@ -1,0 +1,9 @@
+[Unit]
+Description=Generates educational synthetic traffic for Observability Pipelines labs.
+
+[Service]
+ExecStart=/usr/local/bin/dynamo
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

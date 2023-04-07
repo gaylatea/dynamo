@@ -1,0 +1,13 @@
+sources:
+  agent:
+    type: datadog_agent
+    address: 0.0.0.0:8282
+    multiple_outputs: true
+
+sinks:
+  console:
+    type: console
+    inputs:
+      - agent.logs
+    encoding:
+      codec: json
