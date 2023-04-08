@@ -24,15 +24,20 @@ configured:
  - VPC flow logs, including evidence of an SSH brute-force attack.
 */
 use std::time;
+use std::time::Duration;
 
+use async_stream::stream;
 use chrono::prelude::*;
 use clap::Parser;
 use fakeit::company;
 use fakeit::internet;
 use fakeit::payment;
+use gethostname::gethostname;
+use json_patch::merge;
 use leaky_bucket::RateLimiter;
 use serde_json::{self, json};
 use tokio::sync::mpsc;
+use tokio_stream::StreamExt;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -60,6 +65,14 @@ struct Args {
     /// Rate limit for SSH brute force attack VPC logs. Disabled by default.
     #[arg(long, default_value_t = 0)]
     vpc_log_attack_rate_limit_per_s: usize,
+
+    /// Batch size for sending to Vector.
+    #[arg(long, default_value_t = 5)]
+    sender_batch_size: usize,
+
+    /// Batch timeout in seconds for sending to Vector.
+    #[arg(long, default_value_t = 5)]
+    sender_batch_timeout_s: u64,
 }
 
 fn send_log(
@@ -81,11 +94,19 @@ fn send_log(
         .build();
     let tx2 = tx.clone();
 
+    // These simple attributes are needed for the Datadog API as
+    // implemented by Vector, so we add them to every message.
+    let hostname = gethostname().into_string().expect("could not get hostname");
+    let needed = json!({
+        "ddsource": "dynamo",
+        "hostname": hostname,
+        "status": "INFO",
+        "ddtags": "kube_namespace:test",
+    });
+
     tokio::spawn(async move {
         loop {
             rate_limiter.acquire_one().await;
-
-            let ts = Utc::now().timestamp_micros() / 1000;
 
             let mut v = generator();
             if !v.is_array() {
@@ -95,18 +116,17 @@ fn send_log(
             let vs = v
                 .as_array_mut()
                 .expect("JSON returned from generator should be an array");
-            for val in vs {
-                // Set some basic attributes that are required for the Datadog API.
-                val["ddsource"] = json!("dynamo");
-                val["hostname"] = json!("loverfox.local"); // TODO: get actual hostname?
-                val["timestamp"] = json!(ts);
-                val["status"] = json!("INFO");
-                val["ddtags"] = json!("kube_namespace:test");
-            }
+            for mut val in vs {
+                merge(&mut val, &needed);
 
-            tx2.send(v)
-                .await
-                .expect("Could not send to internal channel");
+                val["timestamp"] = json!(Utc::now().timestamp_micros() / 1000);
+                match tx2.send(val.to_owned()).await {
+                    Ok(_) => {}
+                    Err(_) => {
+                        break;
+                    }
+                }
+            }
         }
     });
 }
@@ -216,19 +236,28 @@ async fn main() {
         });
     });
 
-    while let Some(mut message) = rx.recv().await {
-        // TODO: batching?
-        if !message.is_array() {
-            // Vector expects an array of messages, but sometimes we might
-            // supply one from the log generator.
-            message = json!([message]);
+    let stream = stream! {
+        while let Some(message) = rx.recv().await {
+            yield message;
         }
+    };
 
-        // TODO: error handling and reconnecting
-        logs_client
+    let mut pinned = Box::pin(stream.chunks_timeout(
+        args.sender_batch_size,
+        Duration::from_secs(args.sender_batch_timeout_s),
+    ));
+    while let Some(message) = pinned.next().await {
+        let m = json!(message);
+        match logs_client
             .post(&logs_client_address)
-            .body(message.to_string())
+            .body(m.to_string())
             .send()
-            .await;
+            .await
+        {
+            Ok(_) => {}
+            Err(e) => {
+                println!("Could not connect to Vector: {}", e);
+            }
+        };
     }
 }
