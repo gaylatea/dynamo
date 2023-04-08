@@ -1,4 +1,3 @@
-use rand::Rng;
 /**
 dynamo is a small program that will emit logs at a specified pace, intended
 as an instructional tool for people using Vector.
@@ -35,6 +34,7 @@ use fakeit::payment;
 use gethostname::gethostname;
 use json_patch::merge;
 use leaky_bucket::RateLimiter;
+use rand::Rng;
 use serde_json::{self, json};
 use tokio::sync::mpsc;
 use tokio_stream::StreamExt;
