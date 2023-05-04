@@ -6,4 +6,4 @@
 --url "https://github.com/silversupreme/dynamo"
 --maintainer "Aria Adair <ari.adair@datadoghq.com>"
 
-target/release/dynamo=/usr/bin/dynamo src/dynamo.service=/etc/systemd/system/dynamo.service
+target/release/dynamo=/usr/bin/dynamo src/dynamo.service=/etc/systemd/system/dynamo.service src/dynamo-vpc.service=/etc/systemd/system/dynamo-vpc.service

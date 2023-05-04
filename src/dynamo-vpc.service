@@ -1,0 +1,6 @@
+[Unit]
+Description=Generates educational synthetic VPC traffic for Observability Pipelines labs.
+
+[Service]
+ExecStart=/usr/local/bin/dynamo --http-log-rate-limit-per-s=0 --http-log-error-rate-limit-per-s=0 --vpc-log-rate-limit-per-s=100 --vpc-log-attack-rate-limit-per-s=1
+Restart=always
