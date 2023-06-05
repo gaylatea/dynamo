@@ -1,9 +1,9 @@
 -s dir
 --name dynamo
---version 1.0.0
+--version 1.0.1
 --architecture native
 --description "An instructive generator for Vector learning labs."
 --url "https://github.com/silversupreme/dynamo"
 --maintainer "Aria Adair <ari.adair@datadoghq.com>"
 
-target/x86_64-unknown-linux-gnu/release/dynamo=/usr/bin/dynamo src/dynamo.service=/etc/systemd/system/dynamo.service src/dynamo-vpc.service=/etc/systemd/system/dynamo-vpc.service
+target/x86_64-unknown-linux-gnu/release/dynamo=/usr/local/bin/dynamo src/dynamo.service=/etc/systemd/system/dynamo.service src/dynamo-vpc.service=/etc/systemd/system/dynamo-vpc.service
